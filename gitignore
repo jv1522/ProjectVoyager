@@ -1,0 +1,79 @@
+# Python bytecode and tooling
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging and Qt build output
+build/
+dist/
+*.egg-info/
+.eggs/
+*.spec.bak
+
+# IntelliJ / PyCharm / VS Code
+.idea/
+*.iml
+.vscode/
+
+# macOS and Windows
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local diary data and SQLite sidecars
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+/media/
+/data/
+/backups/
+/exports/
+/recordings/
+/seed/*
+!/seed/.gitkeep
+
+# Personal media and generated recordings
+*.mov
+*.mp4
+*.m4v
+*.avi
+*.mkv
+*.wav
+*.mp3
+*.m4a
+*.aiff
+*.flac
+*.band
+/audio/
+
+# AI diary exports (may contain private notes)
+voyager-brief*.json
+voyager-response*.json
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
