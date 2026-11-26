@@ -112,6 +112,18 @@ class MusicXml(unittest.TestCase):
         self.assertGreater(len(samples), 8000)
         self.assertGreater(max(samples), 0.1)
 
+    def test_explicit_short_bow_marks_propagate(self):
+        marked = lambda mark: f"<notations><articulations><{mark}/></articulations></notations>"
+        body = bar(1, "@A", n("A", 4, 1, marked("staccato")),
+                   n("B", 4, 1, marked("spiccato")), n("C", 5, 1, marked("staccatissimo")),
+                   n("D", 5, 1), n("E", 5, 1, marked("tenuto")))
+        score = parse_musicxml(xml(body))
+        notes = score.timed_notes()
+        self.assertEqual([note.articulation for note in notes],
+                         ["spiccato", "spiccato", "spiccato", "sustain", "sustain"])
+        self.assertEqual([note.start for note in notes], [0, 0.5, 1, 1.5, 2])
+        self.assertTrue(all(note.duration == 0.5 for note in notes))
+
 
 class ViolinSamples(unittest.TestCase):
     def test_bundled_recordings_are_used_and_long_notes_loop(self):
@@ -136,6 +148,66 @@ class ViolinSamples(unittest.TestCase):
             )
         self.assertGreater(max(samples), 0.1)
 
+    def test_short_bow_samples_have_two_takes_and_are_not_looped(self):
+        from voyager import score_audio
+
+        takes = score_audio._load_short_recordings()
+        self.assertEqual([len(take) for take in takes], [11, 11])
+        self.assertEqual({recording.root for recording in takes[0]},
+                         {recording.root for recording in takes[1]})
+        first = score_audio._sampled_tone(69, 8.0, "spiccato", 0)
+        second = score_audio._sampled_tone(69, 8.0, "spiccato", 1)
+        self.assertLess(len(first), 2 * score_audio.RATE)
+        self.assertNotEqual(first, second)
+        self.assertGreater(max(abs(value) for value in first), 0.05)
+        self.assertEqual(first[-1], 0.0)
+        shorter = score_audio._sampled_tone(70, 0.1, "spiccato")
+        self.assertLessEqual(len(shorter), int((0.1 + score_audio.RELEASE) * score_audio.RATE))
+        self.assertEqual(shorter[-1], 0.0)
+
+    def test_short_bow_falls_back_to_sustain_and_synth(self):
+        from unittest import mock
+        from voyager import score_audio
+
+        with mock.patch.object(score_audio, "_short_recordings", [[], []]):
+            self.assertEqual(score_audio._sampled_tone(69, 0.2, "spiccato"),
+                             score_audio._sampled_tone(69, 0.2))
+            with mock.patch.object(score_audio, "_recordings", []):
+                self.assertIsNone(score_audio._sampled_tone(69, 0.2, "spiccato"))
+                notes = parse_musicxml(xml(bar(1, "@A", n(
+                    "A", 4, 1, "<notations><articulations><staccato/></articulations></notations>"
+                )))).timed_notes()
+                self.assertGreater(max(render_score(notes, TempoMap())), 0.1)
+
+    def test_short_bow_picks_nearest_recorded_pitch(self):
+        from unittest import mock
+        from voyager import score_audio
+
+        recordings = [score_audio._Recording(69, [0.5] * 10000),
+                      score_audio._Recording(72, [0.1] * 10000)]
+        with mock.patch.object(score_audio, "_short_recordings", [recordings, recordings]):
+            lower = score_audio._sampled_tone(70, 0.2, "spiccato")
+            upper = score_audio._sampled_tone(71, 0.2, "spiccato")
+        self.assertAlmostEqual(lower[300], 0.5)
+        self.assertAlmostEqual(upper[300], 0.1)
+
+    def test_round_robin_per_pitch_and_render_length(self):
+        from unittest import mock
+        from voyager import score_audio
+        from voyager.timing import TimedNote
+
+        notes = [TimedNote(0, 0.5, 69, articulation="spiccato"),
+                 TimedNote(0.5, 0.5, 71, articulation="spiccato"),
+                 TimedNote(1, 0.5, 69, articulation="spiccato"),
+                 TimedNote(1.5, 0.5, 69, articulation="spiccato")]
+        with mock.patch.object(score_audio, "_sampled_tone", wraps=score_audio._sampled_tone) as sample:
+            result = render_score(notes, TempoMap([(0, 120)]))
+        self.assertEqual([call.args for call in sample.call_args_list],
+                         [(69, 0.25, "spiccato", 0), (71, 0.25, "spiccato", 0),
+                          (69, 0.25, "spiccato", 1)])
+        self.assertEqual(len(result), int(1.2 * score_audio.RATE))
+        self.assertGreater(max(result), 0.1)
+
 
 class Widget(unittest.TestCase):
     def test_load_tick_and_apply(self):
@@ -154,6 +226,9 @@ class Widget(unittest.TestCase):
             widget.applied.connect(lambda name, analysis: got.append((name, analysis)))
             widget.load(xml_path, midi_path)
             self.assertIn("MIDI", widget.status.text())
+            self.assertNotIn(widget.score.key_name, widget.status.text())
+            self.assertNotIn("4/4", widget.status.text())
+            self.assertNotIn("Chords:", widget.status.text())
             widget.view.grab()  # exercise painting
             widget.seek_beat(2.0)
             self.assertAlmostEqual(widget.view.beat, 2.0)
@@ -166,15 +241,199 @@ class Widget(unittest.TestCase):
             self.assertEqual(widget.bpm_box.value(), 120)  # from the MIDI file
             widget.bpm_box.setValue(60)
             self.assertAlmostEqual(widget.tempo_map.seconds_at(4.0), 4.0)
+            self.assertEqual(widget.beat_seconds, 0.5)
+            self.assertEqual(widget.lead, 2.0)
+            self.assertFalse(widget.backing_box.isChecked())
+            self.assertTrue(widget.view.dance_enabled)
+            widget.dance_box.setChecked(False)
+            self.assertFalse(widget.view.dance_enabled)
+            widget.dance_box.setChecked(True)
+            self.assertTrue(widget.view.dance_enabled)
+            widget._wav = Path(folder) / "old.wav"
+            widget.backing_box.setChecked(True)
+            self.assertIsNone(widget._wav)
             widget.apply_button.click()
             self.assertEqual(got[-1][1].tempo, 60)
             got.clear()
             widget.apply_button.click()
             self.assertEqual(len(got), 1)
+            midi_path.write_bytes(b"not a MIDI file")
+            widget.load(xml_path, midi_path)
+            self.assertIn("MIDI unreadable", widget.status.text())
             widget.load(Path(folder) / "missing.musicxml")
             self.assertIn("Could not read", widget.status.text())
             widget.shutdown()
             del app
+
+    def test_selected_backing_is_passed_to_audio_renderer(self):
+        from unittest.mock import patch
+
+        from PySide6.QtWidgets import QApplication
+
+        from voyager.score_widget import ScoreWidget
+
+        app = QApplication.instance() or QApplication([])
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "s.musicxml"
+            path.write_bytes(xml(bar(1, "@A", n("C", 4, 2)), tempo=60))
+            widget = ScoreWidget()
+            widget.load(path)
+            self.assertEqual(widget.tempo_map.initial_bpm, 60)
+            with patch("voyager.score_widget.write_score_audio", return_value=True) as render:
+                self.assertTrue(widget._ensure_audio())
+                self.assertIsNone(render.call_args.kwargs["accompaniment"])
+                self.assertEqual(render.call_args.args[3:], (4, 0.5))
+                widget.backing_box.setChecked(True)
+                self.assertIsNone(widget._wav)
+                self.assertTrue(widget._ensure_audio())
+                self.assertIs(render.call_args.kwargs["accompaniment"], widget.score)
+            widget.shutdown()
+        del app
+
+
+class ScoreAppearanceTests(unittest.TestCase):
+    def test_score_view_uses_parchment_canvas_and_engraved_ink(self):
+        from PySide6.QtWidgets import QApplication
+
+        from voyager.score_view import BG, INK, ScoreView
+
+        app = QApplication.instance() or QApplication([])
+        view = ScoreView()
+        view.resize(600, 300)
+        image = view.grab().toImage()
+        self.assertEqual(BG.name(), "#f7f2e6")
+        self.assertEqual(INK.name(), "#29271f")
+        self.assertEqual(image.pixelColor(0, 0), BG)
+        del view
+        del app
+
+    def test_only_sounding_notes_glow(self):
+        from unittest.mock import patch
+
+        from PySide6.QtGui import QImage, QPainter
+        from PySide6.QtWidgets import QApplication
+
+        from voyager.score_view import ScoreView
+
+        app = QApplication.instance() or QApplication([])
+        score = parse_musicxml(xml(bar(1, "@A", n("C", 4, 2), n("D", 4, 2))))
+        view = ScoreView()
+        view.set_score(score)
+        next_note = score.notes[1]
+        page = score.measures
+        image = QImage(1000, 400, QImage.Format_ARGB32)
+        painter = QPainter(image)
+        with patch.object(view, "_draw_glow", wraps=view._draw_glow) as glow:
+            view.set_beat(0.5)
+            view._draw_note(painter, next_note, page, 0, [40, 52, 64, 76, 88], True)
+            glow.assert_not_called()
+            view.set_beat(0.0, countdown=4)
+            view._draw_note(painter, score.notes[0], page, 0, [40, 52, 64, 76, 88], True)
+            glow.assert_not_called()
+            view.set_beat(1.5)
+            view._draw_note(painter, next_note, page, 0, [40, 52, 64, 76, 88], True)
+            glow.assert_called_once()
+        painter.end()
+        del view
+        del app
+
+    def test_dance_is_brief_and_stays_within_note_duration(self):
+        from voyager.score_view import note_dance_angle
+
+        self.assertEqual(note_dance_angle(-0.1, 1), 0)
+        self.assertEqual(note_dance_angle(0, 1), 0)
+        self.assertGreater(abs(note_dance_angle(0.06, 1)), 1)
+        self.assertEqual(note_dance_angle(0.5, 1), 0)
+        self.assertEqual(note_dance_angle(0.25, 0.25), 0)
+        self.assertEqual(note_dance_angle(0, 0), 0)
+
+    def test_paged_staves_remain_and_inactive_notes_transition(self):
+        from PySide6.QtCore import QPoint, Qt
+        from PySide6.QtTest import QTest
+        from PySide6.QtWidgets import QApplication
+        from voyager.score_view import ScoreView
+
+        app = QApplication.instance() or QApplication([])
+        body = "".join(
+            bar(i + 1, "@A" if i == 0 else "", n("C", 4, 8))
+            for i in range(12)
+        )
+        view = ScoreView()
+        view.resize(1000, 600)
+        view.set_score(parse_musicxml(xml(body)))
+        view.set_bars_per_page(4)
+        seeks = []
+        view.seek_requested.connect(seeks.append)
+        scale, ox, oy = view._scale()
+        inactive_pos = QPoint(int(ox + 300 * scale), int(oy + view.row_height * 1.5 * scale))
+        QTest.mouseClick(view, Qt.LeftButton, pos=inactive_pos)
+        self.assertEqual(seeks, [])
+        staves, pages = [], []
+        draw_staff, draw_page = view._draw_staff, view._draw_page
+
+        def capture_staff(painter, row, opacity, page=None):
+            staves.append((row, opacity))
+            draw_staff(painter, row, opacity, page)
+
+        def capture_page(painter, index, alpha, is_current):
+            pages.append((index, alpha))
+            draw_page(painter, index, alpha, is_current)
+
+        view._draw_staff, view._draw_page = capture_staff, capture_page
+        view.set_beat(0)
+        view.grab()
+        self.assertEqual([row for row, _ in staves], [0, 1])
+        self.assertEqual(pages, [(0, 1.0)])
+        self.assertEqual(view._inactive_pages(0), (None, 1, 0.0))
+
+        staves.clear()
+        pages.clear()
+        view.set_beat(14)
+        view.grab()
+        self.assertEqual([row for row, _ in staves], [0, 1])
+        self.assertEqual(view._inactive_pages(0), (None, 1, 0.5))
+        self.assertEqual(pages, [(1, 0.5), (0, 1.0)])
+
+        pages.clear()
+        view.set_beat(16)
+        view.grab()
+        self.assertEqual(view._inactive_pages(1), (0, 2, 0.0))
+        self.assertEqual(pages, [(0, 0.35), (1, 1.0)])
+
+        view.set_beat(30)
+        self.assertEqual(view._inactive_pages(1), (0, 2, 0.5))
+        upper_pos = QPoint(int(ox + 300 * scale), int(oy + view.row_height * 0.5 * scale))
+        QTest.mouseClick(view, Qt.LeftButton, pos=upper_pos)
+        self.assertGreaterEqual(seeks[-1], 32)
+        view.set_beat(16)
+        QTest.mouseClick(view, Qt.LeftButton, pos=upper_pos)
+        self.assertLess(seeks[-1], 16)
+        view.set_beat(48)
+        self.assertEqual(view._inactive_pages(2), (1, None, 0.0))
+        del view
+        del app
+
+    def test_export_title_draws_on_normal_and_transparent_frames(self):
+        from PySide6.QtGui import QColor, QImage
+        from PySide6.QtWidgets import QApplication
+
+        from voyager.score_view import BG
+        from voyager.video_export import TITLE_HEIGHT, _draw_title
+
+        app = QApplication.instance() or QApplication([])
+        for transparent in (False, True):
+            image = QImage(600, 300, QImage.Format_ARGB32)
+            image.fill(QColor(0, 0, 0, 0) if transparent else BG)
+            _draw_title(image, "Leaving Earth", transparent)
+            self.assertTrue(any(
+                image.pixelColor(x, y).red() < 150
+                and image.pixelColor(x, y).alpha() > 0
+                for x in range(40, 300) for y in range(TITLE_HEIGHT)
+            ))
+            if transparent:
+                self.assertEqual(image.pixelColor(599, 0).alpha(), 0)
+                self.assertGreater(image.pixelColor(25, 30).alpha(), 0)
+        del app
 
 
 if __name__ == "__main__":
@@ -202,6 +461,51 @@ class CountInTests(unittest.TestCase):
         beat, countdown, _ = playback_state(3.0, tempo, 2.0, 0.5)
         self.assertEqual((beat, countdown), (2.0, 0))
 
+    def test_count_in_is_independent_of_score_tempo(self):
+        from voyager.video_export import playback_state
+
+        tempo = TempoMap([(0, 60)])
+        self.assertEqual(playback_state(1.5, tempo, 2.0, 0.5)[:2], (0.0, 1))
+        self.assertEqual(playback_state(3.0, tempo, 2.0, 0.5)[:2], (1.0, 0))
+
+    def test_accompaniment_follows_pickup_meter_and_tempo_changes(self):
+        from voyager.musicxml import Measure, Score, ScoreNote
+        from voyager.score_audio import accompaniment_events
+
+        score = Score(
+            beats=6,
+            unit=8,
+            measures=[Measure(0, 0, 0.5), Measure(1, 0.5, 3.0)],
+            notes=[ScoreNote(0, 0.5, 60, "C", 4, 0, 0),
+                   ScoreNote(0.5, 3, 67, "G", 4, 0, 1)],
+        )
+        events = accompaniment_events(score, TempoMap([(0, 120), (1, 60)]))
+        beats = sorted(time for time, kind, _ in events if kind in ("kick", "snare"))
+        self.assertEqual(beats, [0.0, 0.25, 0.5, 1.0, 1.5, 2.0, 2.5])
+        self.assertEqual(len([event for event in events if event[1] == "chord"]), 6)
+        self.assertEqual(len([event for event in events if event[1] == "shaker"]), 7)
+
+    def test_backing_is_optional_and_starts_after_count_in(self):
+        from voyager.score_audio import RATE, render_score
+
+        score = parse_musicxml(xml(bar(1, "@A", n("C", 4, 2), n("E", 4, 2))))
+        tempo = TempoMap([(0, 120)])
+        plain = render_score(score.timed_notes(), tempo, 4, 0.5)
+        backing = render_score(score.timed_notes(), tempo, 4, 0.5, accompaniment=score)
+        self.assertEqual(plain[:2 * RATE], backing[:2 * RATE])
+        self.assertNotEqual(plain[2 * RATE:], backing[2 * RATE:])
+
+    def test_backing_chords_cover_all_measures(self):
+        from voyager.musicxml import Measure, Score, ScoreNote, derive_chords
+        from voyager.score_audio import accompaniment_events
+
+        measures = [Measure(i, i * 4, 4) for i in range(34)]
+        score = Score(measures=measures, notes=[ScoreNote(0, 1, 60, "C", 4, 0, 0)])
+        self.assertEqual(len(derive_chords(score)), 32)
+        self.assertEqual(len(derive_chords(score, include_pickup=True, max_bars=None)), 34)
+        chords = [event for event in accompaniment_events(score, TempoMap()) if event[1] == "chord"]
+        self.assertEqual(len(chords), 34 * 3)
+
     def test_export_smoke(self):
         import tempfile
         from pathlib import Path
@@ -220,6 +524,6 @@ class CountInTests(unittest.TestCase):
         tempo = TempoMap([(0, 240)])
         with tempfile.TemporaryDirectory() as folder:
             wav, out = Path(folder, "a.wav"), Path(folder, "o.mp4")
-            write_score_audio(score.timed_notes(), tempo, wav, 4, 0.25)
+            write_score_audio(score.timed_notes(), tempo, wav, 4, 0.25, accompaniment=score)
             export_video(score, tempo, wav, 1.5, 1.0, 0.25, 0, out)
             self.assertGreater(out.stat().st_size, 1000)

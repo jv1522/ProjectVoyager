@@ -14,6 +14,7 @@ class TimedNote:
     duration: float
     pitch: int  # MIDI note number
     velocity: int = 80
+    articulation: str = "sustain"
 
 
 class TempoMap:

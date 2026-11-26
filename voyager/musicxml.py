@@ -32,6 +32,7 @@ class ScoreNote:
     octave: int
     alter: int
     measure: int
+    articulation: str = "sustain"
 
     @property
     def diatonic(self) -> int:
@@ -77,7 +78,7 @@ class Score:
         return {letter: -1 for letter in FLAT_ORDER[: -self.fifths]}
 
     def timed_notes(self) -> list[TimedNote]:
-        return [TimedNote(n.start, n.duration, n.pitch) for n in self.notes]
+        return [TimedNote(n.start, n.duration, n.pitch, articulation=n.articulation) for n in self.notes]
 
 
 def _name(element: ET.Element) -> str:
@@ -193,8 +194,17 @@ def parse_musicxml(data: bytes) -> Score:
                         if "start" not in ties:
                             del open_ties[midi]
                     else:
+                        short_bow = any(
+                            _name(mark) in ("staccato", "staccatissimo", "spiccato")
+                            for notations in element if _name(notations) == "notations"
+                            for articulations in notations if _name(articulations) == "articulations"
+                            for mark in articulations
+                        )
                         score.notes.append(
-                            ScoreNote(measure_start + start, duration, midi, step, octave, alter, measure_index)
+                            ScoreNote(
+                                measure_start + start, duration, midi, step, octave, alter,
+                                measure_index, "spiccato" if short_bow else "sustain",
+                            )
                         )
                         if "start" in ties:
                             open_ties[midi] = len(score.notes) - 1
@@ -254,16 +264,20 @@ def _best_chord(weights: list[float], tonic: int, minor: bool, names, first_or_l
     return best_name
 
 
-def derive_chords(score: Score) -> list[str]:
+def derive_chords(
+    score: Score, *, include_pickup: bool = False, max_bars: int | None = MAX_BARS
+) -> list[str]:
     """One simple triad per bar, chosen from the notes that sound in it."""
     names = pitch_names(score.tonic, score.minor)
     nominal = score.beats * 4.0 / score.unit
     measures = list(score.measures)
-    if len(measures) > 1 and measures[0].length < nominal * 0.75:
+    if not include_pickup and len(measures) > 1 and measures[0].length < nominal * 0.75:
         measures = measures[1:]  # skip a pickup bar
+    if max_bars is not None:
+        measures = measures[:max_bars]
     tonic_chord = names[score.tonic] + ("m" if score.minor else "")
     chords: list[str] = []
-    for position, measure in enumerate(measures[:MAX_BARS]):
+    for position, measure in enumerate(measures):
         weights = [0.0] * 12
         end = measure.start + measure.length
         for note in score.notes:
@@ -274,7 +288,7 @@ def derive_chords(score: Score) -> list[str]:
         if sum(weights) == 0:
             chords.append(chords[-1] if chords else tonic_chord)
         else:
-            edge = position in (0, len(measures[:MAX_BARS]) - 1)
+            edge = position in (0, len(measures) - 1)
             chords.append(_best_chord(weights, score.tonic, score.minor, names, edge))
     return chords
 

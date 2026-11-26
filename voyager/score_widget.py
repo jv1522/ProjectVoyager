@@ -48,7 +48,10 @@ class ScoreWidget(QWidget):
         self._analysis = None
 
         self.title_label = QLabel()
-        self.title_label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        self.title_label.setStyleSheet(
+            "font-family: Georgia, 'Times New Roman', serif; "
+            "font-size: 19px; font-weight: bold;"
+        )
         self.status = QLabel()
         self.status.setWordWrap(True)
         self.view = ScoreView()
@@ -60,8 +63,17 @@ class ScoreWidget(QWidget):
         self.bpm_box.valueChanged.connect(lambda: self._bpm_changed())
         self.count_box = QCheckBox("Count-in")
         self.count_box.setChecked(True)
-        self.count_box.setToolTip("Click one bar of beats before the first note")
+        self.count_box.setToolTip("Count one bar at 120 BPM before playback")
         self.count_box.toggled.connect(lambda: self._invalidate_audio())
+        self.backing_box = QCheckBox("Accompaniment")
+        self.backing_box.setToolTip(
+            "Add percussion, bass and approximate chords derived from the score"
+        )
+        self.backing_box.toggled.connect(lambda: self._invalidate_audio())
+        self.dance_box = QCheckBox("Dancing notes")
+        self.dance_box.setChecked(True)
+        self.dance_box.setToolTip("Add a brief wobble as each note starts")
+        self.dance_box.toggled.connect(self._set_dancing_notes)
         self.bars_box = QComboBox()
         self.bars_box.addItem("Scrolling", 0)
         self.bars_box.addItem("4 bars per page", 4)
@@ -86,17 +98,22 @@ class ScoreWidget(QWidget):
         controls.addWidget(self.play_button)
         controls.addWidget(self.stop_button)
         controls.addWidget(self.time_label)
-        controls.addWidget(self.bpm_box)
-        controls.addWidget(self.count_box)
-        controls.addWidget(self.bars_box)
         controls.addStretch(1)
         controls.addWidget(self.export_button)
         controls.addWidget(self.apply_button)
+        settings = QHBoxLayout()
+        settings.addWidget(self.bpm_box)
+        settings.addWidget(self.count_box)
+        settings.addWidget(self.backing_box)
+        settings.addWidget(self.dance_box)
+        settings.addWidget(self.bars_box)
+        settings.addStretch(1)
         layout = QVBoxLayout(self)
         layout.addWidget(self.title_label)
         layout.addWidget(self.status)
         layout.addWidget(self.view, 1)
         layout.addLayout(controls)
+        layout.addLayout(settings)
 
         self.player = QMediaPlayer(self)
         self.audio = QAudioOutput(self)
@@ -135,11 +152,7 @@ class ScoreWidget(QWidget):
         self.bpm_box.blockSignals(False)
         self.view.set_score(self.score)
         self.title_label.setText(self.score.title or self.name)
-        self.status.setText(
-            f"{self.score.key_name}, "
-            f"{self.score.beats}/{self.score.unit}, {len(self.score.measures)} bars. "
-            f"Playback timing from {source}. Chords: {self._analysis.progression}"
-        )
+        self.status.setText(f"Playback timing from {source}.")
         self._set_controls(True)
         self._update_time(0.0)
 
@@ -172,6 +185,10 @@ class ScoreWidget(QWidget):
         self.view.set_beat(0.0)
         self._update_time(0.0)
 
+    def _set_dancing_notes(self, enabled: bool):
+        self.view.dance_enabled = enabled
+        self.view.update()
+
     def _invalidate_audio(self):
         if not self.score:
             return
@@ -188,10 +205,8 @@ class ScoreWidget(QWidget):
 
     @property
     def beat_seconds(self) -> float:
-        """Length of one beat of the time signature at the opening tempo."""
-        if not self.score:
-            return 0.5
-        return (4.0 / self.score.unit) * 60.0 / self.tempo_map.initial_bpm
+        """Length of a count-in beat at 120 BPM, independently of the score."""
+        return 0.5
 
     @property
     def lead(self) -> float:
@@ -200,7 +215,7 @@ class ScoreWidget(QWidget):
     def _set_controls(self, enabled: bool):
         for button in (
             self.play_button, self.stop_button, self.apply_button, self.bpm_box,
-            self.count_box, self.export_button,
+            self.count_box, self.backing_box, self.export_button,
         ):
             button.setEnabled(enabled)
 
@@ -213,7 +228,8 @@ class ScoreWidget(QWidget):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             written = write_score_audio(
-                self.notes, self.tempo_map, path, self.count_in_beats, self.beat_seconds
+                self.notes, self.tempo_map, path, self.count_in_beats, self.beat_seconds,
+                accompaniment=self.score if self.backing_box.isChecked() else None,
             )
         finally:
             QApplication.restoreOverrideCursor()
@@ -290,6 +306,7 @@ class ScoreWidget(QWidget):
                 self.score, self.tempo_map, self._wav, seconds, self.lead, self.beat_seconds,
                 self.view.bars_per_page,
                 Path(path), transparent, progress,
+                title=self.title_label.text(), dance_enabled=self.view.dance_enabled,
             )
         except ExportError as error:
             dialog.close()

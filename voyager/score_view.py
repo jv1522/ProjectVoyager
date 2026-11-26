@@ -15,17 +15,25 @@ from voyager.musicxml import Score
 W = 1000.0  # logical width; the painter scales this to the widget
 SPACE = 12.0  # staff line spacing
 STAFF_BOTTOM = 4 * 7 + 2  # E4 as a diatonic index (octave * 7 + step)
-BG = QColor("#0b1026")
-INK = QColor("#e9e6dc")
-DIM = QColor("#7f87a8")
-GOLD = QColor("#f0c14b")
-PLAYED = QColor("#b8993f")
+BG = QColor("#f7f2e6")
+INK = QColor("#29271f")
+DIM = QColor("#8e836d")
+ACTIVE = QColor("#26766e")
+PLAYED = QColor("#9a7441")
 PLAYHEAD_WIDTH = 120.0  # logical px; wide, soft-edged translucent band
 SCROLL_X = 360.0  # where the playhead sits in scrolling mode
 SCROLL_PPB = 90.0  # pixels per beat in scrolling mode
 MAX_ZOOM = 1.7
-LOOKAHEAD = 2.0  # beats ahead of the playhead in which upcoming notes glow
 CLEF = "\U0001d11e"
+
+
+def note_dance_angle(elapsed_beats: float, duration: float) -> float:
+    """A brief damped wobble at the onset without moving the note off its pitch."""
+    window = min(0.5, duration)
+    if window <= 0 or elapsed_beats < 0 or elapsed_beats >= window:
+        return 0.0
+    progress = elapsed_beats / window
+    return 8.0 * math.sin(progress * 4 * math.pi) * (1.0 - progress)
 
 
 def _draw_centered(painter, text, x, y_centre):
@@ -44,6 +52,7 @@ class ScoreView(QWidget):
         self.countdown = 0  # beats left in the count-in; 0 when not counting in
         self.countdown_phase = 0.0  # 0..1 through the current count-in beat
         self.transparent = False  # leave the background clear (for overlay exports)
+        self.dance_enabled = True
         self.bars_per_page = 4
         self._pages: list[list] = []
         self._low, self._high = 28, 40
@@ -124,8 +133,14 @@ class ScoreView(QWidget):
         x = (event.position().x() - ox) / scale
         row = int(((event.position().y() - oy) / scale) // self.row_height)
         current = self.page_of(self.beat)
-        page_index = current if row == current % 2 else current + 1
-        if not 0 <= page_index < len(self._pages):
+        if self.scrolling:
+            page_index = current if row == current % 2 else None
+        elif row == current % 2:
+            page_index = current
+        else:
+            previous, upcoming, fade = self._inactive_pages(current)
+            page_index = upcoming if upcoming is not None and fade > 0 else previous
+        if page_index is None:
             return
         page = self._pages[page_index]
         left, per_beat = self._x_range(page)
@@ -133,6 +148,13 @@ class ScoreView(QWidget):
         self.seek_requested.emit(min(max(beat, page[0].start), page[-1].start + page[-1].length))
 
     # --- painting --------------------------------------------------------
+
+    def _inactive_pages(self, current: int) -> tuple[int | None, int | None, float]:
+        previous = current - 1 if current > 0 else None
+        upcoming = current + 1 if current + 1 < len(self._pages) else None
+        last = self._pages[current][-1]
+        fade = min(1.0, max(0.0, (self.beat - last.start) / last.length))
+        return previous, upcoming, fade if upcoming is not None else 0.0
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -145,46 +167,50 @@ class ScoreView(QWidget):
         painter.translate(ox, oy)
         painter.scale(scale, scale)
         current = self.page_of(self.beat)
-        measure = next(
-            (m for m in self._pages[current] if m.start <= self.beat < m.start + m.length),
-            self._pages[current][-1],
-        )
-        in_last_bar = measure is self._pages[current][-1]
-        fade = (self.beat - measure.start) / measure.length if in_last_bar else 0.0
-        fade = min(1.0, max(0.0, fade * 1.3))
-        for index in (current, current + 1):
-            if index < len(self._pages) and (index == current or not self.scrolling):
-                self._draw_page(painter, index, 1.0 if index == current else fade, index == current)
+        if self.scrolling:
+            self._draw_staff(painter, current % 2, 1.0, self._pages[current])
+            self._draw_page(painter, current, 1.0, True)
+        else:
+            for row in (0, 1):
+                self._draw_staff(painter, row, 1.0 if row == current % 2 else 0.45)
+            previous, upcoming, fade = self._inactive_pages(current)
+            if previous is not None:
+                self._draw_page(painter, previous, 0.35 * (1.0 - fade), False)
+            if upcoming is not None and fade > 0:
+                self._draw_page(painter, upcoming, fade, False)
+            self._draw_page(painter, current, 1.0, True)
         if self.countdown:
             self._draw_countdown(painter)
 
     def _draw_countdown(self, painter):
         """A large number that shrinks and fades through each count-in beat."""
         painter.setOpacity(0.9 - 0.55 * self.countdown_phase)
-        painter.setPen(QColor(255, 224, 140))
-        font = QFont("Helvetica", int(96 - 26 * self.countdown_phase), QFont.Bold)
+        painter.setPen(ACTIVE)
+        font = QFont("Georgia", int(96 - 26 * self.countdown_phase), QFont.Bold)
         painter.setFont(font)
         _draw_centered(painter, str(self.countdown), W / 2, self.row_height / 2 + 4)
         painter.setOpacity(1.0)
 
-    def _draw_page(self, painter, index, alpha, is_current):
-        page, row, score = self._pages[index], index % 2, self.score
-        left, per_beat = self._x_range(page)
-        end_x = self._x(page[-1].start + page[-1].length, page)
-        if self.scrolling:
-            end_x = min(end_x, W - 12)
+    def _draw_staff(self, painter, row, opacity, page=None):
         lines = [self._y(STAFF_BOTTOM + 8 - 2 * i, row) for i in range(5)]  # top to bottom
-
-        painter.setOpacity(1.0 if is_current else 0.25 + 0.75 * alpha)
+        end_x = min(self._x(page[-1].start + page[-1].length, page), W - 12) if page else W - 24
+        painter.setOpacity(opacity)
         painter.setPen(QPen(DIM, 1.2))
         for y in lines:
             painter.drawLine(int(48), int(y), int(end_x), int(y))
         painter.drawLine(48, int(lines[0]), 48, int(lines[-1]))
+        painter.setOpacity(1.0)
 
-        painter.setOpacity(1.0 if is_current else alpha)
+    def _draw_page(self, painter, index, alpha, is_current):
+        page, row, score = self._pages[index], index % 2, self.score
+        end_x = self._x(page[-1].start + page[-1].length, page)
+        if self.scrolling:
+            end_x = min(end_x, W - 12)
+        lines = [self._y(STAFF_BOTTOM + 8 - 2 * i, row) for i in range(5)]
+        painter.setOpacity(alpha)
         self._draw_clef(painter, lines)
         self._draw_signatures(painter, score, lines, index == 0)
-        painter.setFont(QFont("Helvetica", 10))
+        painter.setFont(QFont("Georgia", 10))
         for m in page:
             x = self._x(m.start, page)
             if self.scrolling and not self._left() < x < W:
@@ -212,27 +238,27 @@ class ScoreView(QWidget):
             painter.setOpacity(1.0)
             half = PLAYHEAD_WIDTH / 2
             band = QLinearGradient(x - half, 0, x + half, 0)
-            for stop, alpha in ((0.0, 0), (0.3, 62), (0.7, 62), (1.0, 0)):
-                band.setColorAt(stop, QColor(255, 236, 150, alpha))
+            for stop, alpha in ((0.0, 0), (0.3, 42), (0.7, 42), (1.0, 0)):
+                band.setColorAt(stop, QColor(76, 144, 130, alpha))
             painter.fillRect(
                 QRectF(x - half, lines[0] - 40, PLAYHEAD_WIDTH, lines[-1] - lines[0] + 80), band
             )
         painter.setOpacity(1.0)
 
     def _draw_clef(self, painter, lines):
-        font = QFont("Times", 54)
+        font = QFont("Georgia", 54)
         painter.setPen(INK)
         if QFontMetrics(font).inFontUcs4(0x1D11E):
             painter.setFont(font)
             painter.drawText(54, int(lines[3] + 14), CLEF)
         else:
-            font = QFont("Times", 40, QFont.Bold, True)
+            font = QFont("Georgia", 40, QFont.Bold, True)
             painter.setFont(font)
             painter.drawText(58, int(lines[3] + 6), "G")
 
     def _draw_signatures(self, painter, score, lines, show_time):
         painter.setPen(INK)
-        painter.setFont(QFont("Helvetica", 22))
+        painter.setFont(QFont("Georgia", 22))
         symbol = "\u266f" if score.fifths >= 0 else "\u266d"
         # Staff-line offsets (in half spaces from the top line) for each accidental.
         sharps = [0, 3, -1, 2, 5, 1, 4]
@@ -242,41 +268,35 @@ class ScoreView(QWidget):
             _draw_centered(painter, symbol, 98 + 16 * i, lines[0] + half * SPACE / 2)
         if show_time:
             x = 104 + 16 * abs(score.fifths)
-            painter.setFont(QFont("Helvetica", 24, QFont.Bold))
+            painter.setFont(QFont("Georgia", 24, QFont.Bold))
             _draw_centered(painter, str(score.beats), x, (lines[0] + lines[2]) / 2)
             _draw_centered(painter, str(score.unit), x, (lines[2] + lines[4]) / 2)
 
-    def _next_note(self):
-        return next((n for n in self.score.notes if n.start > self.beat), None)
-
-    def _draw_glow(self, painter, x, y, closeness, is_next):
-        """A halo that brightens as the note approaches, to guide the eye ahead of the playhead."""
-        radius = 20 + 14 * closeness
+    def _draw_glow(self, painter, x, y):
+        """Draw a soft light around a note only while it is sounding."""
+        radius = 38
         glow = QRadialGradient(x, y, radius)
-        glow.setColorAt(0.0, QColor(255, 214, 120, int(150 * closeness)))
-        glow.setColorAt(1.0, QColor(255, 214, 120, 0))
+        glow.setColorAt(0.0, QColor(79, 151, 136, 150))
+        glow.setColorAt(1.0, QColor(79, 151, 136, 0))
         painter.setPen(Qt.NoPen)
         painter.setBrush(glow)
         painter.drawEllipse(QRectF(x - radius, y - radius, radius * 2, radius * 2))
-        if is_next:
-            painter.setBrush(Qt.NoBrush)
-            painter.setPen(QPen(QColor(255, 214, 120, int(200 * closeness)), 2))
-            painter.drawEllipse(QRectF(x - 14, y - 14, 28, 28))
 
     def _draw_note(self, painter, note, page, row, lines, is_current):
         x = self._x(note.start, page) + 22
         y = self._y(note.diatonic, row)
         end = note.start + note.duration
-        if is_current and note.start <= self.beat < end:
-            colour = GOLD
+        sounding = is_current and not self.countdown and note.start <= self.beat < end
+        if sounding:
+            colour = ACTIVE
         elif is_current and end <= self.beat:
             colour = PLAYED
         else:
             colour = INK
-        if is_current and 0 < note.start - self.beat <= LOOKAHEAD:
-            self._draw_glow(painter, x, y, 1.0 - (note.start - self.beat) / LOOKAHEAD, note is self._next_note())
+        if sounding:
+            self._draw_glow(painter, x, y)
         zoom = 1.0
-        if is_current and note.start <= self.beat < end:
+        if sounding:
             progress = (self.beat - note.start) / note.duration
             zoom = 1.0 + (MAX_ZOOM - 1.0) * math.sin(math.pi * min(1.0, progress)) ** 0.5
         painter.setPen(QPen(colour, 1.6))
@@ -291,10 +311,12 @@ class ScoreView(QWidget):
             ly += SPACE
         implied = self.score.key_alterations().get(note.step, 0)
         if note.alter != implied:
-            painter.setFont(QFont("Helvetica", 16))
+            painter.setFont(QFont("Georgia", 16))
             _draw_centered(painter, {0: "\u266e", 1: "\u266f", -1: "\u266d"}.get(note.alter, ""), x - 26, y)
         painter.save()
         painter.translate(x, y)
+        if sounding and self.dance_enabled:
+            painter.rotate(note_dance_angle(self.beat - note.start, note.duration))
         painter.scale(zoom, zoom)
         painter.translate(-x, -y)
         painter.setBrush(colour if note.duration < 2.0 else Qt.NoBrush)

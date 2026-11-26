@@ -1,9 +1,9 @@
 """Renders a score to a WAV file.
 
 Notes are played from bundled solo-violin recordings (VSCO 2 CE, CC0; see
-voyager/data/violin/README.md), pitch-shifted from the nearest recorded note with the
-sustain looped for long notes. If the recordings are missing, a synthesized violin-like
-tone is used instead.
+voyager/data/violin/README.md), pitch-shifted from the nearest recorded note.
+Sustains are looped; explicitly marked short-bow notes use unlooped samples.
+Missing short-bow samples fall back to sustains, then to a synthesized tone.
 """
 
 import array
@@ -11,7 +11,9 @@ import math
 import wave
 from pathlib import Path
 
+from voyager.chords import bass_note, chord_tones, midi_to_frequency, parse_chord
 from voyager.metronome import write_samples
+from voyager.musicxml import Score, derive_chords
 from voyager.timing import TempoMap, TimedNote
 
 RATE = 22050
@@ -39,6 +41,7 @@ class _Recording:
 
 
 _recordings: list[_Recording] | None = None
+_short_recordings: list[list[_Recording]] | None = None
 
 
 def _load_recordings() -> list[_Recording]:
@@ -66,12 +69,58 @@ def _load_recordings() -> list[_Recording]:
     return _recordings
 
 
-def _sampled_tone(pitch: int, seconds: float) -> list[float] | None:
-    recordings = _load_recordings()
+def _load_short_recordings() -> list[list[_Recording]]:
+    global _short_recordings
+    if _short_recordings is None:
+        takes: list[list[_Recording]] = [[], []]
+        for path in sorted((SAMPLE_DIR / "spiccato").glob("*_rr[12].wav")):
+            name, take = path.stem.rsplit("_rr", 1)
+            if len(name) < 2 or name[0] not in _NOTE_BASE or not name[1:].isdigit():
+                continue
+            try:
+                with wave.open(str(path)) as wav:
+                    if wav.getnchannels() != 1 or wav.getsampwidth() != 2 or wav.getframerate() != RATE:
+                        continue
+                    pcm = array.array("h")
+                    pcm.frombytes(wav.readframes(wav.getnframes()))
+            except (wave.Error, OSError):
+                continue
+            if len(pcm) < 2:
+                continue
+            level = math.sqrt(sum(v * v for v in pcm) / len(pcm)) or 1.0
+            root = 12 * (int(name[1:]) + 1) + _NOTE_BASE[name[0]]
+            takes[int(take) - 1].append(_Recording(root, [v * (3000.0 / level) / 32768 for v in pcm]))
+        _short_recordings = takes
+    return _short_recordings
+
+
+def _sampled_tone(pitch: int, seconds: float, articulation: str = "sustain", take: int = 0) -> list[float] | None:
+    short = articulation == "spiccato"
+    recordings = _load_short_recordings()[take % 2] if short else _load_recordings()
+    if short and not recordings:
+        return _sampled_tone(pitch, seconds)
     if not recordings:
         return None
     rec = min(recordings, key=lambda r: abs(r.root - pitch))
     step = 2 ** ((pitch - rec.root) / 12)
+    if short:
+        data = rec.data
+        count = min(int((seconds + RELEASE) * RATE), int((len(data) - 1) / step))
+        hold = int(seconds * RATE)
+        end_fade = max(1, int(0.01 * RATE))
+        out = []
+        for i in range(count):
+            position = i * step
+            index = int(position)
+            frac = position - index
+            value = data[index] * (1 - frac) + data[index + 1] * frac
+            if i >= hold:
+                value *= max(0.0, 1.0 - (i - hold) / max(1, count - hold)) ** 2
+            elif i < 200:
+                value *= i / 200
+            value *= min(1.0, (count - i - 1) / end_fade)
+            out.append(value)
+        return out
     count = int((seconds + RELEASE) * RATE)
     hold = int(seconds * RATE)
     data, loop_start, loop_end = rec.data, rec.loop_start, rec.loop_end
@@ -155,18 +204,79 @@ def _click(accent: bool) -> list[float]:
     ]
 
 
+def accompaniment_events(score: Score, tempo_map: TempoMap) -> list[tuple[float, str, int]]:
+    """Schedule local backing sounds at meter beats, following every tempo change."""
+    events: list[tuple[float, str, int]] = []
+    chords = derive_chords(score, include_pickup=True, max_bars=None)
+    step = 4.0 / score.unit
+    for measure, name in zip(score.measures, chords):
+        chord = parse_chord(name)
+        if chord is None:
+            raise ValueError(f"Unrecognized derived chord: {name}")
+        beat = 0
+        while beat * step < measure.length - 1e-9:
+            position = measure.start + beat * step
+            start = tempo_map.seconds_at(position)
+            if start >= MAX_SECONDS:
+                return events
+            events.append((start, "kick" if beat == 0 or beat % 2 == 0 else "snare", 0))
+            events.append((start, "bass", bass_note(chord) if beat % 2 == 0 else bass_note(chord) + 7))
+            if beat == 0:
+                for pitch in chord_tones(chord):
+                    events.append((start, "chord", pitch))
+            offbeat = position + step / 2
+            if offbeat < measure.start + measure.length - 1e-9:
+                offbeat_time = tempo_map.seconds_at(offbeat)
+                if offbeat_time < MAX_SECONDS:
+                    events.append((offbeat_time, "shaker", 0))
+            beat += 1
+    return events
+
+
+def _backing_sound(kind: str, pitch: int) -> list[float]:
+    duration = {"kick": 0.16, "snare": 0.12, "shaker": 0.05, "bass": 0.38, "chord": 1.0}[kind]
+    count = int(duration * RATE)
+    out = []
+    state = 17 + pitch
+    for i in range(count):
+        t = i / RATE
+        attack = min(1.0, t / 0.004)
+        if kind == "kick":
+            value = math.sin(2 * math.pi * (65 * t + 10 * (1 - math.exp(-28 * t)) / 28))
+            value *= 0.18 * math.exp(-22 * t)
+        elif kind in ("snare", "shaker"):
+            state = (state * 1103515245 + 12345) & 0x7FFFFFFF
+            noise = state / 0x3FFFFFFF - 1.0
+            if kind == "snare":
+                value = (noise * 0.065 + math.sin(2 * math.pi * 190 * t) * 0.035) * math.exp(-30 * t)
+            else:
+                value = noise * 0.025 * math.exp(-70 * t)
+        else:
+            freq = midi_to_frequency(pitch)
+            phase = 2 * math.pi * freq * t
+            if kind == "bass":
+                value = (math.sin(phase) + 0.25 * math.sin(2 * phase)) * 0.12 * math.exp(-6 * t)
+            else:
+                value = (math.sin(phase) + 0.3 * math.sin(2 * phase) * math.exp(-5 * t))
+                value *= 0.035 * math.exp(-2.8 * t)
+        out.append(value * attack)
+    return out
+
+
 def render_score(
     notes: list[TimedNote],
     tempo_map: TempoMap,
     count_in_beats: int = 0,
     beat_seconds: float = 0.5,
+    *,
+    accompaniment: Score | None = None,
 ) -> list[float]:
     """Mix notes into one sample buffer, after an optional count-in of clicks.
 
     Notes starting after MAX_SECONDS are dropped.
     """
     lead = count_in_beats * beat_seconds
-    cache: dict[tuple[int, int], list[float]] = {}
+    cache: dict[tuple[int, int, str, int], list[float]] = {}
     events = []
     for note in notes:
         start = tempo_map.seconds_at(note.start)
@@ -177,18 +287,25 @@ def render_score(
         events.append((start + lead, length, note))
     if not events:
         return []
-    total = int(max(s + l for s, l, _ in events) * RATE) + int(0.2 * RATE)
+    end = max(s + l for s, l, _ in events)
+    if accompaniment is not None:
+        end = max(end, lead + min(MAX_SECONDS, tempo_map.seconds_at(accompaniment.total_beats)))
+    total = int(end * RATE) + int(0.2 * RATE)
     mix = [0.0] * total
     for beat in range(count_in_beats):
         offset = int(beat * beat_seconds * RATE)
         for i, value in enumerate(_click(beat == 0)):
             mix[offset + i] += value
+    takes: dict[int, int] = {}
     for start, length, note in events:
-        key = (note.pitch, round(length * 20))  # 50 ms duration buckets
+        variant = takes.get(note.pitch, 0) % 2 if note.articulation == "spiccato" else 0
+        if note.articulation == "spiccato":
+            takes[note.pitch] = takes.get(note.pitch, 0) + 1
+        key = (note.pitch, round(length * 20), note.articulation, variant)  # 50 ms duration buckets
         tone = cache.get(key)
         if tone is None:
             seconds = key[1] / 20 or 0.05
-            tone = _sampled_tone(note.pitch, seconds) or _tone(note.pitch, seconds)
+            tone = _sampled_tone(note.pitch, seconds, note.articulation, variant) or _tone(note.pitch, seconds)
             cache[key] = tone
         gain = note.velocity / 127 * 0.8
         offset = int(start * RATE)
@@ -196,6 +313,15 @@ def render_score(
             if offset + i >= total:
                 break
             mix[offset + i] += value * gain
+    if accompaniment is not None:
+        sounds: dict[tuple[str, int], list[float]] = {}
+        for start, kind, pitch in accompaniment_events(accompaniment, tempo_map):
+            key = (kind, pitch)
+            if key not in sounds:
+                sounds[key] = _backing_sound(kind, pitch)
+            offset = int((start + lead) * RATE)
+            for i, value in enumerate(sounds[key][:max(0, total - offset)]):
+                mix[offset + i] += value
     return _reverb(mix)
 
 
@@ -205,9 +331,13 @@ def write_score_audio(
     path: Path,
     count_in_beats: int = 0,
     beat_seconds: float = 0.5,
+    *,
+    accompaniment: Score | None = None,
 ) -> bool:
     """Write the rendered score to path; False when there is nothing to play."""
-    samples = render_score(notes, tempo_map, count_in_beats, beat_seconds)
+    samples = render_score(
+        notes, tempo_map, count_in_beats, beat_seconds, accompaniment=accompaniment
+    )
     if not samples:
         return False
     write_samples(path, samples, RATE)
