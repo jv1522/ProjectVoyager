@@ -1,0 +1,191 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="850" viewBox="0 0 1440 850" role="img" aria-labelledby="title description">
+  <title id="title">Eight original sheet music player theme concepts</title>
+  <desc id="description">A two-row visual board of eight distinct guitar score-player mockups, with Parchment Recital and its Studio Engraver-inspired notation marked as selected.</desc>
+  <defs>
+    <style>
+      .label { font: 700 17px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .tiny { font: 600 9px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .micro { font: 600 7px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .staff { stroke-width: 1; }
+      .note { stroke-width: 2; stroke-linecap: round; }
+      .card { rx: 17; }
+    </style>
+    <linearGradient id="highway" x2="0" y2="1">
+      <stop stop-color="#131a2d"/>
+      <stop offset="1" stop-color="#080c17"/>
+    </linearGradient>
+    <linearGradient id="coach" x2="1" y2="1">
+      <stop stop-color="#ece9ff"/>
+      <stop offset="1" stop-color="#ffe6df"/>
+    </linearGradient>
+    <linearGradient id="syncVideo" x2="1" y2="1">
+      <stop stop-color="#193f55"/>
+      <stop offset="1" stop-color="#d58b54"/>
+    </linearGradient>
+  </defs>
+  <rect width="1440" height="850" fill="#101722"/>
+  <text x="48" y="46" fill="#f3f5f8" class="label" font-size="24">SHEET MUSIC PLAYER · VISUAL DIRECTIONS</text>
+  <text x="48" y="69" fill="#aab5c5" class="tiny" font-size="12">Original concept sketches — illustrative mockups, not screenshots of the referenced products</text>
+
+  <!-- Studio Engraver -->
+  <g transform="translate(40 98)">
+    <rect width="330" height="346" class="card" fill="#f6f5f0"/>
+    <rect x="18" y="18" width="294" height="199" rx="8" fill="#fffefa" stroke="#dedbd1"/>
+    <text x="32" y="39" fill="#292a2b" class="tiny">LEAVING EARTH</text>
+    <text x="32" y="52" fill="#77766f" class="micro">A minor · 4/4</text>
+    <g stroke="#c7c5be" class="staff">
+      <path d="M32 91H298 M32 101H298 M32 111H298 M32 121H298 M32 131H298"/>
+      <path d="M32 151H298 M32 161H298 M32 171H298 M32 181H298 M32 191H298"/>
+    </g>
+    <path d="M102 91v40 M162 101v30 M223 111v20" stroke="#242526" class="note"/>
+    <g fill="#242526"><ellipse cx="102" cy="91" rx="7" ry="4"/><ellipse cx="162" cy="111" rx="7" ry="4"/><ellipse cx="223" cy="121" rx="7" ry="4"/></g>
+    <path d="M192 80V199" stroke="#26827e" stroke-width="2"/>
+    <rect x="18" y="230" width="294" height="46" rx="9" fill="#eae8e1"/>
+    <circle cx="45" cy="253" r="13" fill="#fffefa"/><path d="M43 246l10 7-10 7z" fill="#3f625f"/>
+    <path d="M76 253h207" stroke="#c7c5be" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="158" cy="253" r="5" fill="#26827e"/>
+    <text x="18" y="314" fill="#272927" class="label">Studio Engraver</text>
+    <text x="18" y="331" fill="#77766f" class="micro">Paper · precise ink · restrained teal</text>
+  </g>
+
+  <!-- Voyager Dark Studio -->
+  <g transform="translate(395 98)">
+    <rect width="330" height="346" class="card" fill="#111a2a"/>
+    <rect x="18" y="18" width="294" height="199" rx="8" fill="#172337" stroke="#27364c"/>
+    <text x="32" y="39" fill="#f4ead2" class="tiny">LEAVING EARTH</text>
+    <text x="32" y="52" fill="#91a1b6" class="micro">A minor · 4/4</text>
+    <g stroke="#78879b" class="staff" opacity=".8">
+      <path d="M32 91H298 M32 101H298 M32 111H298 M32 121H298 M32 131H298"/>
+      <path d="M32 151H298 M32 161H298 M32 171H298 M32 181H298 M32 191H298"/>
+    </g>
+    <path d="M105 91v40 M168 101v30 M231 111v20" stroke="#f1c66d" class="note"/>
+    <g fill="#f1c66d"><ellipse cx="105" cy="91" rx="7" ry="4"/><ellipse cx="168" cy="111" rx="7" ry="4"/><ellipse cx="231" cy="121" rx="7" ry="4"/></g>
+    <path d="M198 80V199" stroke="#ffd783" stroke-width="2"/>
+    <rect x="18" y="230" width="294" height="46" rx="9" fill="#1c2a3e"/>
+    <circle cx="45" cy="253" r="13" fill="#293b52"/><path d="M43 246l10 7-10 7z" fill="#f1c66d"/>
+    <path d="M76 253h207" stroke="#3b4b60" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="158" cy="253" r="5" fill="#f1c66d"/>
+    <text x="18" y="314" fill="#f4ead2" class="label">Voyager Dark Studio</text>
+    <text x="18" y="331" fill="#91a1b6" class="micro">Midnight blue · ivory · Voyager gold</text>
+  </g>
+
+  <!-- Note Highway -->
+  <g transform="translate(750 98)">
+    <rect width="330" height="346" class="card" fill="#111827"/>
+    <rect x="18" y="18" width="294" height="199" rx="8" fill="url(#highway)"/>
+    <text x="32" y="39" fill="#f4f6fb" class="tiny">LEAVING EARTH</text>
+    <text x="32" y="52" fill="#8592a8" class="micro">SIX-STRING PRACTICE LANE</text>
+    <g stroke="#334052" stroke-width="2">
+      <path d="M35 82H295 M35 104H295 M35 126H295 M35 148H295 M35 170H295 M35 192H295"/>
+    </g>
+    <g>
+      <rect x="69" y="74" width="22" height="16" rx="5" fill="#ef7379"/><rect x="135" y="96" width="22" height="16" rx="5" fill="#f0aa61"/>
+      <rect x="183" y="118" width="22" height="16" rx="5" fill="#ebd765"/><rect x="224" y="140" width="22" height="16" rx="5" fill="#78d09b"/>
+      <rect x="250" y="162" width="22" height="16" rx="5" fill="#69bce0"/><rect x="279" y="184" width="22" height="16" rx="5" fill="#bb91ed"/>
+    </g>
+    <path d="M42 163H300" stroke="#fff4d2" stroke-width="3"/>
+    <rect x="18" y="230" width="294" height="46" rx="9" fill="#202b3e"/>
+    <circle cx="45" cy="253" r="13" fill="#33435a"/><path d="M43 246l10 7-10 7z" fill="#ffffff"/>
+    <text x="80" y="249" fill="#f3f6fb" class="tiny">TEMPO</text><text x="80" y="263" fill="#96a5b8" class="micro">60 BPM</text>
+    <path d="M145 254h142" stroke="#435169" stroke-width="4" stroke-linecap="round"/>
+    <text x="18" y="314" fill="#f4f6fb" class="label">Note Highway</text>
+    <text x="18" y="331" fill="#96a5b8" class="micro">String lanes · approach line · rhythm cues</text>
+  </g>
+
+  <!-- Friendly Coach -->
+  <g transform="translate(1105 98)">
+    <rect width="295" height="346" class="card" fill="url(#coach)"/>
+    <rect x="16" y="17" width="263" height="200" rx="12" fill="#fffdfb"/>
+    <text x="31" y="41" fill="#37344b" class="tiny">TODAY'S PRACTICE</text>
+    <text x="31" y="57" fill="#8a8598" class="micro">A minor · slow and steady</text>
+    <rect x="31" y="74" width="233" height="65" rx="11" fill="#f2f0ff"/>
+    <text x="45" y="101" fill="#5147a0" class="label" font-size="21">Am</text>
+    <g fill="#8a80d4"><circle cx="202" cy="91" r="5"/><circle cx="220" cy="91" r="5"/><circle cx="238" cy="91" r="5"/></g>
+    <text x="45" y="123" fill="#77718d" class="micro">Let each string ring</text>
+    <rect x="31" y="151" width="107" height="42" rx="12" fill="#e1f3eb"/>
+    <text x="45" y="168" fill="#3d7c65" class="tiny">LISTEN</text><text x="45" y="183" fill="#55937b" class="micro">Play it once</text>
+    <rect x="148" y="151" width="116" height="42" rx="12" fill="#ffebe4"/>
+    <text x="162" y="168" fill="#a85d4d" class="tiny">YOUR TURN</text><text x="162" y="183" fill="#bb796a" class="micro">Take your time</text>
+    <rect x="16" y="230" width="263" height="46" rx="13" fill="#ded9fa"/>
+    <circle cx="43" cy="253" r="13" fill="#fff"/><path d="M41 246l10 7-10 7z" fill="#756ac6"/>
+    <path d="M72 253h184" stroke="#c4bdf0" stroke-width="5" stroke-linecap="round"/>
+    <text x="16" y="314" fill="#37344b" class="label">Friendly Coach</text>
+    <text x="16" y="331" fill="#77718d" class="micro">Soft colors · chord cards · clear steps</text>
+  </g>
+
+  <!-- Synced Performance -->
+  <g transform="translate(40 474)">
+    <rect width="330" height="346" class="card" fill="#17212b"/>
+    <rect x="18" y="18" width="294" height="114" rx="8" fill="url(#syncVideo)"/>
+    <circle cx="166" cy="74" r="22" fill="#ffffff" opacity=".22"/>
+    <path d="M161 61l20 13-20 13z" fill="#ffffff"/>
+    <text x="30" y="119" fill="#ffffff" class="micro">LOCAL PERFORMANCE VIDEO</text>
+    <rect x="18" y="144" width="294" height="73" rx="8" fill="#f8f6ef"/>
+    <g stroke="#9e9c94" class="staff"><path d="M32 165H298 M32 174H298 M32 183H298 M32 192H298 M32 201H298"/></g>
+    <path d="M124 158V208" stroke="#df9c50" stroke-width="2"/>
+    <g fill="#39444c"><ellipse cx="91" cy="183" rx="6" ry="3.5"/><ellipse cx="150" cy="174" rx="6" ry="3.5"/><ellipse cx="214" cy="192" rx="6" ry="3.5"/></g>
+    <rect x="18" y="230" width="294" height="46" rx="9" fill="#243441"/>
+    <circle cx="45" cy="253" r="13" fill="#354a58"/><path d="M43 246l10 7-10 7z" fill="#f6cf8a"/>
+    <text x="77" y="249" fill="#e5edf1" class="tiny">0.75×</text><text x="77" y="263" fill="#9eafb8" class="micro">LOOP 4 BARS</text>
+    <path d="M148 253h139" stroke="#526571" stroke-width="4" stroke-linecap="round"/>
+    <text x="18" y="314" fill="#f1f3f4" class="label">Synced Performance</text>
+    <text x="18" y="331" fill="#a8b7bd" class="micro">Video + notation · slow · loop · compare</text>
+  </g>
+
+  <!-- Practice Workbench -->
+  <g transform="translate(395 474)">
+    <rect width="330" height="346" class="card" fill="#e8edf1"/>
+    <rect x="18" y="18" width="294" height="199" rx="8" fill="#fbfcfd" stroke="#d4dce2"/>
+    <rect x="18" y="18" width="294" height="31" rx="8" fill="#f0f3f5"/>
+    <text x="31" y="38" fill="#4a5863" class="micro">PLAY   LOOP   TEMPO   COUNT-IN   MIX</text>
+    <text x="31" y="68" fill="#29343c" class="tiny">LEAVING EARTH</text>
+    <g stroke="#b4bec5" class="staff"><path d="M32 102H298 M32 112H298 M32 122H298 M32 132H298 M32 142H298"/></g>
+    <g fill="#374a55"><ellipse cx="100" cy="112" rx="6" ry="3.5"/><ellipse cx="161" cy="132" rx="6" ry="3.5"/><ellipse cx="224" cy="122" rx="6" ry="3.5"/></g>
+    <path d="M185 94V152" stroke="#328c86" stroke-width="2"/>
+    <rect x="32" y="165" width="266" height="34" rx="6" fill="#edf2f4"/>
+    <text x="42" y="180" fill="#3d515d" class="micro">METRONOME</text><text x="42" y="192" fill="#73848e" class="micro">60 BPM · 4/4</text>
+    <rect x="18" y="230" width="294" height="46" rx="9" fill="#dbe3e8"/>
+    <circle cx="45" cy="253" r="13" fill="#fff"/><path d="M43 246l10 7-10 7z" fill="#328c86"/>
+    <path d="M76 253h207" stroke="#b7c3ca" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="176" cy="253" r="5" fill="#328c86"/>
+    <text x="18" y="314" fill="#29343c" class="label">Practice Workbench</text>
+    <text x="18" y="331" fill="#667781" class="micro">Docked tools · compact · easy to control</text>
+  </g>
+
+  <!-- Parchment Recital -->
+  <g transform="translate(750 474)">
+    <rect width="330" height="346" class="card" fill="#d9c9a9"/>
+    <rect x="30" y="18" width="270" height="199" rx="4" fill="#f5ecd7" stroke="#c7b58f"/>
+    <path d="M46 35H283" stroke="#d6c6a5"/>
+    <text x="48" y="55" fill="#554a38" class="tiny">LEAVING EARTH</text>
+    <text x="48" y="68" fill="#8a7b61" class="micro">Andante · A minor</text>
+    <g stroke="#b4a587" class="staff"><path d="M48 101H282 M48 111H282 M48 121H282 M48 131H282 M48 141H282"/><path d="M48 164H282 M48 174H282 M48 184H282 M48 194H282 M48 204H282"/></g>
+    <g fill="#574b37"><ellipse cx="107" cy="121" rx="6" ry="3.5"/><ellipse cx="174" cy="111" rx="6" ry="3.5"/><ellipse cx="240" cy="131" rx="6" ry="3.5"/></g>
+    <path d="M205 94V149" stroke="#26766e" stroke-width="2"/>
+    <rect x="30" y="230" width="270" height="46" rx="8" fill="#e9dcc0"/>
+    <text x="47" y="258" fill="#6a5b42" class="tiny">‹     PAGE 1 OF 3     ›</text>
+    <path d="M250 252h31" stroke="#26766e" stroke-width="3" stroke-linecap="round"/>
+    <rect x="204" y="291" width="92" height="21" rx="10" fill="#26766e"/>
+    <text x="250" y="305" text-anchor="middle" fill="#ffffff" class="micro">SELECTED</text>
+    <text x="18" y="314" fill="#554a38" class="label">Parchment Recital</text>
+    <text x="18" y="331" fill="#82745d" class="micro">Warm page · quiet controls · page turns</text>
+  </g>
+
+  <!-- Modern Composer -->
+  <g transform="translate(1105 474)">
+    <rect width="295" height="346" class="card" fill="#edf1f8"/>
+    <rect x="16" y="18" width="263" height="199" rx="9" fill="#ffffff" stroke="#dce3ee"/>
+    <rect x="16" y="18" width="263" height="34" rx="9" fill="#f7f9fc"/>
+    <text x="29" y="39" fill="#526174" class="micro">FILE   EDIT   SCORE   PLAYBACK     SHARE</text>
+    <rect x="29" y="65" width="237" height="25" rx="6" fill="#e9effb"/>
+    <text x="40" y="81" fill="#526a9d" class="micro">NOTE  REST  DURATION  ACCIDENTAL  CHORD</text>
+    <text x="31" y="111" fill="#293b57" class="tiny">LEAVING EARTH</text>
+    <g stroke="#b5c3d6" class="staff"><path d="M31 139H264 M31 149H264 M31 159H264 M31 169H264 M31 179H264"/></g>
+    <g fill="#3b5278"><ellipse cx="98" cy="149" rx="6" ry="3.5"/><ellipse cx="157" cy="169" rx="6" ry="3.5"/><ellipse cx="220" cy="159" rx="6" ry="3.5"/></g>
+    <rect x="16" y="230" width="263" height="46" rx="9" fill="#e0e8f6"/>
+    <circle cx="43" cy="253" r="13" fill="#fff"/><path d="M41 246l10 7-10 7z" fill="#5879b7"/>
+    <text x="72" y="249" fill="#4d638c" class="tiny">EDIT SCORE</text><text x="72" y="263" fill="#8192ad" class="micro">Click to enter notes</text>
+    <text x="16" y="314" fill="#293b57" class="label">Modern Composer</text>
+    <text x="16" y="331" fill="#71809a" class="micro">Bright workspace · clear tools · editable score</text>
+  </g>
+</svg>
